@@ -406,6 +406,12 @@ def _calculate_feature_importances(estimator):
             estimator.named_steps.est.coef_)
     return importances
 
+def _calculate_shapely_values(estimator, X_test):
+    import shap  # optional import
+    # only set cacl_feature_importance=True if using gradient boosting
+    explainer = shap.TreeExplainer(estimator)
+    shap_values = explainer.shap_values(X_test)
+    return shap_values
 
 def _predict_and_plot(output_dir, y_test, y_pred, vmin=None, vmax=None,
                       classification=True, palette='sirocco'):
