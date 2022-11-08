@@ -518,9 +518,11 @@ def shapely_values(table : biom.Table,
     import shap  # optional import
     models = sample_estimator['est']
     explainer = shap.TreeExplainer(models)
-    shap_values = explainer.shap_values(table.to_dataframe().T.values)
+    features = table.to_dataframe()
+    featureids= sample_estimator.named_steps.dv.get_feature_names()
+    features = features.loc[featureids]
+    shap_values = explainer.shap_values(features.T.values)
     sampleids = table.ids()
-    featureids = table.ids(axis='observation')
     shap_values = pd.DataFrame(shap_values, index=sampleids, columns=featureids)
     return shap_values
     
