@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright (c) 2017-2021, QIIME 2 development team.
+# Copyright (c) 2017-2022, QIIME 2 development team.
 #
 # Distributed under the terms of the Modified BSD License.
 #
@@ -33,12 +33,15 @@ from ._format import (SampleEstimatorDirFmt,
                       PredictionsFormat,
                       PredictionsDirectoryFormat,
                       ProbabilitiesFormat,
-                      ProbabilitiesDirectoryFormat)
+                      ProbabilitiesDirectoryFormat,
+                      TrueTargetsDirectoryFormat)
 
 from ._type import (ClassifierPredictions, RegressorPredictions,
                     SampleEstimator, BooleanSeries, Importance,
-                    Classifier, Regressor, Probabilities)
+                    Classifier, Regressor, Probabilities,
+                    TrueTargets)
 import q2_sample_classifier
+from q2_sample_classifier.classify import shapely_values
 
 citations = Citations.load('citations.bib', package='q2_sample_classifier')
 
@@ -102,7 +105,7 @@ parameters = {
         'missing_samples': Str % Choices(['error', 'ignore'])},
     'splitter': {
         'test_size': Float % Range(0.0, 1.0, inclusive_end=False,
-                                   inclusive_start=False)},
+                                   inclusive_start=True)},
     'rfe': {
         'step': Float % Range(0.0, 1.0, inclusive_end=False,
                               inclusive_start=False),
@@ -226,15 +229,21 @@ plugin.pipelines.register_function(
              ('feature_importance', FeatureData[Importance]),
              ('predictions', SampleData[ClassifierPredictions])
              ] + pipeline_outputs + [
-                ('probabilities', SampleData[Probabilities]),
-                ('heatmap', Visualization)],
+        ('probabilities', SampleData[Probabilities]),
+        ('heatmap', Visualization),
+        ('training_targets', SampleData[TrueTargets]),
+        ('test_targets', SampleData[TrueTargets])],
     input_descriptions={'table': input_descriptions['table']},
     parameter_descriptions=classifier_pipeline_parameter_descriptions,
     output_descriptions={
         **pipeline_output_descriptions,
         'probabilities': input_descriptions['probabilities'],
         'heatmap': 'A heatmap of the top 50 most important features from the '
-                   'table.'},
+                   'table.',
+        'training_targets': 'Series containing true target values of '
+        'train samples',
+        'test_targets': 'Series containing true target values '
+        'of test samples'},
     name='Train and test a cross-validated supervised learning classifier.',
     description=description.format(
         'categorical', 'supervised learning classifier')
@@ -247,6 +256,9 @@ plugin.pipelines.register_function(
     parameters={
         'metadata': MetadataColumn[Categorical],
         'k': Int,
+        'cv': parameters['cv']['cv'],
+        'random_state': parameters['base']['random_state'],
+        'n_jobs': parameters['base']['n_jobs'],
         'palette': Str % Choices(_custom_palettes().keys()),
     },
     outputs=[
@@ -257,8 +269,11 @@ plugin.pipelines.register_function(
     parameter_descriptions={
         'metadata': 'Categorical metadata column to use as prediction target.',
         'k': 'Number of nearest neighbors',
+        'cv': parameter_descriptions['cv']['cv'],
+        'random_state': parameter_descriptions['base']['random_state'],
+        'n_jobs': parameter_descriptions['base']['n_jobs'],
         'palette': 'The color palette to use for plotting.',
-        },
+    },
     output_descriptions={
         'predictions': 'leave one out predictions for each sample',
         'accuracy_results': 'Accuracy results visualization.',
@@ -486,7 +501,9 @@ plugin.methods.register_function(
         'metadata': MetadataColumn[Numeric | Categorical],
         **parameters['regressor']},
     outputs=[('training_table', FeatureTable[T]),
-             ('test_table', FeatureTable[T])],
+             ('test_table', FeatureTable[T]),
+             ('training_targets', SampleData[TrueTargets]),
+             ('test_targets', SampleData[TrueTargets])],
     input_descriptions={'table': 'Feature table containing all features that '
                         'should be used for target prediction.'},
     parameter_descriptions={
@@ -497,7 +514,11 @@ plugin.methods.register_function(
         'metadata': 'Numeric metadata column to use as prediction target.'},
     output_descriptions={
         'training_table': 'Feature table containing training samples',
-        'test_table': 'Feature table containing test samples'},
+        'test_table': 'Feature table containing test samples',
+        'training_targets': 'Series containing true target values of '
+        'train samples',
+        'test_targets': 'Series containing true target values of '
+        'test samples'},
     name='Split a feature table into training and testing sets.',
     description=(
         'Split a feature table into training and testing sets. By default '
@@ -622,12 +643,13 @@ plugin.pipelines.register_function(
 plugin.methods.register_function(
     function=shapely_values,
     inputs={**inputs, 'sample_estimator': SampleEstimator[Classifier]},
-    outputs=[('shapely_values', SampleData[Probabilities])],
+    parameters={},
+    outputs=[('shap', SampleData[Probabilities])],
     input_descriptions={
         'table': input_descriptions['table'],
         'sample_estimator': 'Sample classifier trained with fit_classifier.'},
     output_descriptions={
-        'shapely_values': 'Contributions of each feature towards the prediction.'},
+        'shap': 'Contributions of each feature towards the prediction.'},
     name='Use trained classifier to compute Shapely values new samples.',
     description=(
         "Computes shapely values, which measures the contribution of each feature "
@@ -638,7 +660,7 @@ plugin.methods.register_function(
 # Registrations
 plugin.register_semantic_types(
     SampleEstimator, BooleanSeries, Importance, ClassifierPredictions,
-    RegressorPredictions, Classifier, Regressor, Probabilities)
+    RegressorPredictions, Classifier, Regressor, Probabilities, TrueTargets)
 plugin.register_semantic_type_to_format(
     SampleEstimator[Classifier],
     artifact_format=SampleEstimatorDirFmt)
@@ -660,9 +682,13 @@ plugin.register_semantic_type_to_format(
 plugin.register_semantic_type_to_format(
     SampleData[Probabilities],
     artifact_format=ProbabilitiesDirectoryFormat)
+plugin.register_semantic_type_to_format(
+    SampleData[TrueTargets],
+    artifact_format=TrueTargetsDirectoryFormat)
 plugin.register_formats(
     SampleEstimatorDirFmt, BooleanSeriesFormat, BooleanSeriesDirectoryFormat,
     ImportanceFormat, ImportanceDirectoryFormat, PredictionsFormat,
     PredictionsDirectoryFormat, ProbabilitiesFormat,
-    ProbabilitiesDirectoryFormat)
+    ProbabilitiesDirectoryFormat,
+    TrueTargetsDirectoryFormat)
 importlib.import_module('q2_sample_classifier._transformer')

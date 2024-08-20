@@ -1,6 +1,5 @@
 {% set data = load_setup_py_data() %}
 {% set version = data.get('version') or 'placehold' %}
-{% set release = '.'.join(version.split('.')[:2]) %}
 
 package:
   name: q2-sample-classifier
@@ -19,20 +18,27 @@ requirements:
 
   run:
     - python {{ python }}
-    - pandas >=1
-    - scipy
+    - pandas {{ pandas }}
+    - scipy {{ scipy }}
     - numpy
     - joblib
-    - scikit-learn >=0.22.1
-    - scikit-bio
+    - scikit-learn {{ scikit_learn }}
+    - scikit-bio {{ scikit_bio }}
     - seaborn >=0.8
     - fastcluster
-    - qiime2 {{ release }}.*
-    - q2-types {{ release }}.*
-    - q2templates {{ release }}.*
-    - q2-feature-table {{ release }}.*
+    - qiime2 {{ qiime2_epoch }}.*
+    - q2-types {{ qiime2_epoch }}.*
+    - q2templates {{ qiime2_epoch }}.*
+    - q2-feature-table {{ qiime2_epoch }}.*
 
 test:
+  requires:
+    - qiime2 >={{ qiime2 }}
+    - q2-types >={{ q2_types }}
+    - q2templates >={{ q2templates }}
+    - q2-feature-table >={{ q2_feature_table }}
+    - pytest
+
   imports:
     - q2_sample_classifier
     - qiime2.plugins.sample_classifier

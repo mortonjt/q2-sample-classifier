@@ -1,16 +1,17 @@
 # ----------------------------------------------------------------------------
-# Copyright (c) 2017-2021, QIIME 2 development team.
+# Copyright (c) 2017-2022, QIIME 2 development team.
 #
 # Distributed under the terms of the Modified BSD License.
 #
 # The full license is in the file LICENSE, distributed with this software.
 # ----------------------------------------------------------------------------
 
-import collections
-
+import numpy as np
 from sklearn.ensemble import IsolationForest
 from sklearn.metrics import mean_squared_error, accuracy_score
 from sklearn.feature_extraction import DictVectorizer
+from sklearn.model_selection import KFold
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
 
 import qiime2
@@ -102,42 +103,66 @@ def metatable(ctx,
     return metatab
 
 
-def classify_samples_from_dist(ctx, distance_matrix, metadata, k=1,
-                               palette=defaults['palette']):
-    ''' Returns knn classifier results from a distance matrix.'''
-    distance_matrix = distance_matrix.view(skbio.DistanceMatrix)
-    predictions = []
-    metadata_series = metadata.to_series()
-    for i, row in enumerate(distance_matrix):
-        dists = []
-        categories = []
-        for j, dist in enumerate(row):
-            if j == i:
-                continue  # exclude self
-            dists.append(dist)
-            categories.append(metadata_series[distance_matrix.ids[j]])
+def _fit_predict_knn_cv(
+        x: pd.DataFrame, y: pd.Series, k: int, cv: int,
+        random_state: int, n_jobs: int
+) -> (pd.Series, pd.Series):
+    kf = KFold(n_splits=cv, shuffle=True, random_state=random_state)
 
-        # k-long series of (category: dist) ordered small -> large
-        nn_categories = pd.Series(dists, index=categories).nsmallest(k)
-        counter = collections.Counter(nn_categories.index)
-        max_counts = max(counter.values())
-        # in order of closeness, pick a category that is or shares
-        # max_counts
-        for category in nn_categories.index:
-            if counter[category] == max_counts:
-                predictions.append(category)
-                break
+    # train and test with CV
+    predictions, pred_ids, truth = [], [], []
+    for train_index, test_index in kf.split(x):
+        x_train, x_test = x.iloc[train_index, train_index], \
+                          x.iloc[test_index, train_index]
+        y_train, y_test = y[train_index], y[test_index]
 
-    predictions = pd.Series(predictions, index=distance_matrix.ids)
-    predictions.index.name = 'SampleID'
-    pred = qiime2.Artifact.import_data(
-        'SampleData[ClassifierPredictions]', predictions)
+        knn = KNeighborsClassifier(
+            n_neighbors=k, metric='precomputed', n_jobs=n_jobs
+        )
+        knn.fit(x_train, y_train)
+
+        # gather predictions for the confusion matrix
+        predictions.append(knn.predict(x_test))
+        pred_ids.extend(x_test.index.tolist())
+        truth.append(y_test)
+
+    predictions = pd.Series(
+        np.concatenate(predictions).ravel(),
+        index=pd.Index(pred_ids, name='SampleID')
+    )
+    truth = pd.concat(truth)
+    truth.index.name = 'SampleID'
+
+    return predictions, truth
+
+
+def classify_samples_from_dist(
+        ctx, distance_matrix, metadata, k=1, cv=defaults['cv'],
+        random_state=None, n_jobs=defaults['n_jobs'],
+        palette=defaults['palette']
+):
+    """ Trains and evaluates a KNN classifier from a distance matrix
+        using cross-validation."""
+    distance_matrix = distance_matrix \
+        .view(skbio.DistanceMatrix) \
+        .to_data_frame()
+    # reorder (required for splitting into train/test)
+    metadata_ser = metadata.to_series()[distance_matrix.index]
+
+    predictions, truth = _fit_predict_knn_cv(
+        distance_matrix, metadata_ser, k, cv, random_state, n_jobs
+    )
+    predictions = qiime2.Artifact.import_data(
+        'SampleData[ClassifierPredictions]', predictions
+    )
+    truth = qiime2.CategoricalMetadataColumn(truth)
 
     confusion = ctx.get_action('sample_classifier', 'confusion_matrix')
     accuracy_results, = confusion(
-        pred, metadata, missing_samples='ignore', palette=palette)
+        predictions, truth, missing_samples='ignore', palette=palette
+    )
 
-    return pred, accuracy_results
+    return predictions, accuracy_results
 
 
 def classify_samples(ctx,
@@ -163,8 +188,10 @@ def classify_samples(ctx,
     confusion = ctx.get_action('sample_classifier', 'confusion_matrix')
     heat = ctx.get_action('sample_classifier', 'heatmap')
 
-    X_train, X_test = split(table, metadata, test_size, random_state,
-                            stratify=True, missing_samples=missing_samples)
+    X_train, X_test, y_train, y_test = split(table, metadata, test_size,
+                                             random_state,
+                                             stratify=True,
+                                             missing_samples=missing_samples)
 
     sample_estimator, importance = fit(
         X_train, metadata, step, cv, random_state, n_jobs, n_estimators,
@@ -183,7 +210,7 @@ def classify_samples(ctx,
                        group_samples=True, missing_samples=missing_samples)
 
     return (sample_estimator, importance, predictions, summary,
-            accuracy_results, probabilities, _heatmap)
+            accuracy_results, probabilities, _heatmap, y_train, y_test)
 
 
 def regress_samples(ctx,
@@ -207,8 +234,10 @@ def regress_samples(ctx,
     summarize_estimator = ctx.get_action('sample_classifier', 'summarize')
     scatter = ctx.get_action('sample_classifier', 'scatterplot')
 
-    X_train, X_test = split(table, metadata, test_size, random_state,
-                            stratify, missing_samples=missing_samples)
+    X_train, X_test, y_train, y_test = split(table, metadata, test_size,
+                                             random_state,
+                                             stratify,
+                                             missing_samples=missing_samples)
 
     sample_estimator, importance = fit(
         X_train, metadata, step, cv, random_state, n_jobs, n_estimators,
@@ -303,15 +332,12 @@ def split_table(table: biom.Table, metadata: qiime2.MetadataColumn,
                 test_size: float = defaults['test_size'],
                 random_state: int = None, stratify: str = True,
                 missing_samples: str = defaults['missing_samples']
-                ) -> (biom.Table, biom.Table):
+                ) -> (biom.Table, biom.Table, pd.Series, pd.Series):
     column = metadata.name
     X_train, X_test, y_train, y_test = _prepare_training_data(
         table, metadata, column, test_size, random_state, load_data=True,
         stratify=stratify, missing_samples=missing_samples)
-    # TODO: we can consider returning the metadata (y_train, y_test) if a
-    # SampleData[Metadata] type comes into existence. For now we will just
-    # throw this out.
-    return X_train, X_test
+    return X_train, X_test, y_train, y_test
 
 
 def regress_samples_ncv(
@@ -366,6 +392,7 @@ def confusion_matrix(output_dir: str,
                      missing_samples: str = defaults['missing_samples'],
                      vmin: int = 'auto', vmax: int = 'auto',
                      palette: str = defaults['palette']) -> None:
+
     if vmin == 'auto':
         vmin = None
     if vmax == 'auto':
@@ -487,13 +514,15 @@ def detect_outliers(table: biom.Table,
     return y_pred
 
 def shapely_values(table : biom.Table,
-                   sample_estimator : sklearn.Pipeline) -> pd.DataFrame:
+                   sample_estimator : Pipeline) -> pd.DataFrame:
     import shap  # optional import
-    # only set cacl_feature_importance=True if using gradient boosting
-    explainer = shap.TreeExplainer(estimator)
-    shap_values = explainer.shap_values(table.to_dataframe().T.values)
+    models = sample_estimator['est']
+    explainer = shap.TreeExplainer(models)
+    features = table.to_dataframe()
+    featureids= sample_estimator.named_steps.dv.get_feature_names()
+    features = features.loc[featureids]
+    shap_values = explainer.shap_values(features.T.values)
     sampleids = table.ids()
-    featureids = table.ids(axis='observation')
     shap_values = pd.DataFrame(shap_values, index=sampleids, columns=featureids)
     return shap_values
     

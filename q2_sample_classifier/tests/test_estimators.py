@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright (c) 2017-2021, QIIME 2 development team.
+# Copyright (c) 2017-2022, QIIME 2 development team.
 #
 # Distributed under the terms of the Modified BSD License.
 #
@@ -162,7 +162,8 @@ class EstimatorsTests(SampleClassifierTestPluginBase):
 
         # -- test -- #
         res = sample_classifier.actions.classify_samples_from_dist(
-            distance_matrix=dm, metadata=metadata, k=1)
+            distance_matrix=dm, metadata=metadata, k=1, cv=3, random_state=123
+        )
         pred = res[0].view(pd.Series).sort_values()
         expected = pd.Series(('fat', 'skinny', 'fat', 'skinny'),
                              index=['f1', 's1', 'f2', 's2'])
@@ -192,7 +193,8 @@ class EstimatorsTests(SampleClassifierTestPluginBase):
 
         # -- test -- #
         res = sample_classifier.actions.classify_samples_from_dist(
-            distance_matrix=dm, metadata=metadata, k=1)
+            distance_matrix=dm, metadata=metadata, k=1, cv=3, random_state=123
+        )
         pred = res[0].view(pd.Series)
         expected = pd.Series(('skinny', 'skinny', 'skinny', 'skinny'),
                              index=sample_ids)
@@ -222,7 +224,8 @@ class EstimatorsTests(SampleClassifierTestPluginBase):
 
         # -- test -- #
         res = sample_classifier.actions.classify_samples_from_dist(
-            distance_matrix=dm, metadata=metadata, k=2)
+            distance_matrix=dm, metadata=metadata, k=2, cv=3, random_state=123
+        )
         pred = res[0].view(pd.Series)
         expected = pd.Series(('skinny', 'fat', 'fat', 'skinny'),
                              index=sample_ids)
@@ -250,6 +253,20 @@ class EstimatorsTests(SampleClassifierTestPluginBase):
                 accuracy, seeded_results[classifier], places=4,
                 msg='Accuracy of %s classifier was %f, but expected %f' % (
                     classifier, accuracy, seeded_results[classifier]))
+
+    # test if training classifier with pipeline classify_samples raises
+    # warning when test_size = 0.0
+    def test_classify_samples_w_all_train_set(self):
+        with self.assertWarnsRegex(Warning, "not representative of "
+                                   "your model's performance"):
+            table_fp = self.get_data_path('chardonnay.table.qza')
+            table = qiime2.Artifact.load(table_fp)
+            sample_classifier.actions.classify_samples(
+                table=table, metadata=self.mdc_chard_fp,
+                test_size=0.0, cv=1, n_estimators=10, n_jobs=1,
+                estimator='RandomForestClassifier', random_state=123,
+                parameter_tuning=False, optimize_feature_selection=False,
+                missing_samples='ignore')
 
     # test that the plugin methods/visualizers work
     def test_regress_samples_ncv(self):
@@ -391,28 +408,31 @@ class EstimatorsTests(SampleClassifierTestPluginBase):
             missing_samples='ignore')
 
     def test_split_table_no_rounding_error(self):
-        X_train, X_test = split_table(
+        X_train, X_test, y_train, y_test = split_table(
             self.table_chard_fp, self.mdc_chard_fp, test_size=0.5,
             random_state=123, stratify=True, missing_samples='ignore')
         self.assertEqual(len(X_train.ids()) + len(X_test.ids()), 21)
+        self.assertEqual(y_train.shape[0] + y_test.shape[0], 21)
 
     def test_split_table_no_split(self):
-        X_train, X_test = split_table(
+        X_train, X_test, y_train, y_test = split_table(
             self.table_chard_fp, self.mdc_chard_fp, test_size=0.0,
             random_state=123, stratify=True, missing_samples='ignore')
         self.assertEqual(len(X_train.ids()), 21)
+        self.assertEqual(y_train.shape[0], 21)
 
     def test_split_table_invalid_test_size(self):
         with self.assertRaisesRegex(ValueError, "at least two samples"):
-            X_train, X_test = split_table(
+            X_train, X_test, y_train, y_test = split_table(
                 self.table_chard_fp, self.mdc_chard_fp, test_size=1.0,
                 random_state=123, stratify=True, missing_samples='ignore')
 
     def test_split_table_percnorm(self):
-        X_train, X_test = split_table(
+        X_train, X_test, y_train, y_test = split_table(
             self.table_percnorm, self.mdc_percnorm, test_size=0.5,
             random_state=123, stratify=True, missing_samples='ignore')
         self.assertEqual(len(X_train.ids()) + len(X_test.ids()), 4)
+        self.assertEqual(y_train.shape[0] + y_test.shape[0], 4)
 
     # test experimental functions
     def test_detect_outliers(self):
