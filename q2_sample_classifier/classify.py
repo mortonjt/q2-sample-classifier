@@ -520,11 +520,18 @@ def detect_outliers(table: biom.Table,
     y_pred.name = "outlier"
     return y_pred
 
+
 def shapley_values(table : biom.Table,
                    sample_estimator : Pipeline) -> pd.DataFrame:
     import shap  # optional import
     models = sample_estimator['est']
-    explainer = shap.TreeExplainer(models)
+    try:
+        explainer = shap.TreeExplainer(models)
+    except shap.utils._exceptions.InvalidModelError:
+        raise ValueError(
+            f"Model type {str(type(model))} "
+            "not does not have support for shapley values "
+        )
     features = table.to_dataframe()
     featureids= sample_estimator.named_steps.dv.feature_names_
     features = features.loc[featureids]
@@ -532,4 +539,3 @@ def shapley_values(table : biom.Table,
     sampleids = table.ids()
     shap_values = pd.DataFrame(shap_values, index=sampleids, columns=featureids)
     return shap_values
-    

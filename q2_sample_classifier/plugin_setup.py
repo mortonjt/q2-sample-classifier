@@ -34,6 +34,8 @@ from ._format import (SampleEstimatorDirFmt,
                       PredictionsDirectoryFormat,
                       ProbabilitiesFormat,
                       ProbabilitiesDirectoryFormat,
+                      ShapleyValuesFormat,
+                      ShapleyValuesDirectoryFormat,
                       TrueTargetsDirectoryFormat)
 
 from ._type import (ClassifierPredictions, RegressorPredictions,
@@ -689,7 +691,7 @@ plugin.register_semantic_type_to_format(
     artifact_format=ProbabilitiesDirectoryFormat)
 plugin.register_semantic_type_to_format(
     SampleData[ShapleyValues],
-    artifact_format=ProbabilitiesDirectoryFormat)
+    artifact_format=ShapleyValuesDirectoryFormat)
 plugin.register_semantic_type_to_format(
     SampleData[TrueTargets],
     artifact_format=TrueTargetsDirectoryFormat)
@@ -697,6 +699,7 @@ plugin.register_formats(
     SampleEstimatorDirFmt, BooleanSeriesFormat, BooleanSeriesDirectoryFormat,
     ImportanceFormat, ImportanceDirectoryFormat, PredictionsFormat,
     PredictionsDirectoryFormat, ProbabilitiesFormat,
-    ProbabilitiesDirectoryFormat,
+    ProbabilitiesDirectoryFormat, ShapleyValuesFormat,
+    ShapleyValuesDirectoryFormat,
     TrueTargetsDirectoryFormat)
 importlib.import_module('q2_sample_classifier._transformer')

@@ -574,6 +574,81 @@ class EstimatorsTests(SampleClassifierTestPluginBase):
         self.assertAlmostEqual(
             mse, seeded_predict_results['RandomForestRegressor'])
 
+    def test_shapley_values_classifications(self):
+        for classifier in ['RandomForestClassifier', 'ExtraTreesClassifier',
+                           'GradientBoostingClassifier',
+                           'AdaBoostClassifier[DecisionTree]',
+                           'AdaBoostClassifier[ExtraTrees]']:
+            estimator, importances = fit_classifier(
+                self.table_chard_fp, self.mdc_chard_fp, random_state=123,
+                n_estimators=2, estimator=classifier, n_jobs=1,
+                missing_samples='ignore')
+            pred, prob = predict_classification(self.table_chard_fp, estimator)
+            sv = shapley_values(self.table_chard_fp, estimator)
+
+            exp = self.mdc_chard_fp.to_series().reindex(sv.index).dropna()
+            # reindex both pred and exp because not all samples present in pred
+            # are present in the metadata! (hence missing_samples='ignore')
+            sample_ids = pred.index.intersection(exp.index)
+            sv = sv.loc[sample_ids]
+            pred = pred.loc[sample_ids]
+            exp = exp.loc[sample_ids]
+            # verify shapley values:
+            # test to make sure that the shapley values sum to the predictions values
+            # see assert_additivity function in shap.TreeExplainer
+            diff = np.abs(pred -  sv.sum(axis=1))
+            self.assertLess(np.max(diff / (np.abs(sum_val) + 1e-2)), 1e-2)
+
+    def test_shapley_values_classification_error(self):
+        for classifier in ['LinearSVC', 'SVC', 'KNeighborsClassifier']:
+            estimator, importances = fit_classifier(
+                self.table_chard_fp, self.mdc_chard_fp, random_state=123,
+                n_estimators=2, estimator=classifier, n_jobs=1,
+                missing_samples='ignore')
+            with self.assertRaises(ValueError):
+                shapley_values(self.table_chard_fp, estimator)
+
+    def test_shapley_values_regressions(self):
+        for regressor in ['RandomForestRegressor', 'ExtraTreesRegressor',
+                          'GradientBoostingRegressor',
+                          'AdaBoostRegressor[DecisionTree]',
+                          'AdaBoostRegressor[ExtraTrees]',
+                          'Lasso', 'Ridge', 'ElasticNet']:
+            estimator, importances = fit_regressor(
+                self.table_ecam_fp, self.mdc_ecam_fp, random_state=123,
+                n_estimators=2, estimator=regressor, n_jobs=1,
+                missing_samples='ignore')
+            pred = predict_regression(self.table_ecam_fp, estimator)
+            exp = self.mdc_ecam_fp.to_series()
+            # reindex both pred and exp because not all samples present in pred
+            # are present in the metadata! (hence missing_samples='ignore')
+            sample_ids = pred.index.intersection(exp.index)
+            pred = pred.loc[sample_ids]
+            exp = exp.loc[sample_ids]
+            sv = sv.loc[sample_ids]
+            # see assert_additivity function in shap.TreeExplainer
+            diff = np.abs(pred -  sv.sum(axis=1))
+            self.assertLess(np.max(diff / (np.abs(sum_val) + 1e-2)), 1e-2)
+
+    def test_shapley_values_regressions_error(self):
+        for regressor in ['Lasso', 'Ridge', 'ElasticNet',
+                          'KNeighborsRegressor', 'SVR', 'LinearSVR']:
+            estimator, importances = fit_regressor(
+                self.table_ecam_fp, self.mdc_ecam_fp, random_state=123,
+                n_estimators=2, estimator=regressor, n_jobs=1,
+                missing_samples='ignore')
+            pred = predict_regression(self.table_ecam_fp, estimator)
+            exp = self.mdc_ecam_fp.to_series()
+            # reindex both pred and exp because not all samples present in pred
+            # are present in the metadata! (hence missing_samples='ignore')
+            sample_ids = pred.index.intersection(exp.index)
+            pred = pred.loc[sample_ids]
+            exp = exp.loc[sample_ids]
+            sv = sv.loc[sample_ids]
+            # see assert_additivity function in shap.TreeExplainer
+            diff = np.abs(pred -  sv.sum(axis=1))
+            self.assertLess(np.max(diff / (np.abs(sum_val) + 1e-2)), 1e-2)
+
 
 seeded_results = {
     'RandomForestClassifier': 0.63636363636363635,
