@@ -28,3 +28,5 @@ Probabilities = SemanticType(
     'Probabilities', variant_of=SampleData.field['type'])
 TrueTargets = SemanticType(
     'TrueTargets', variant_of=SampleData.field['type'])
+ShapleyValues = SemanticType(
+    'ShapleyValues', variant_of=SampleData.field['type'])

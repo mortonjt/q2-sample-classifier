@@ -41,7 +41,7 @@ from ._type import (ClassifierPredictions, RegressorPredictions,
                     Classifier, Regressor, Probabilities,
                     TrueTargets)
 import q2_sample_classifier
-from q2_sample_classifier.classify import shapely_values
+from q2_sample_classifier.classify import shapley_values
 
 citations = Citations.load('citations.bib', package='q2_sample_classifier')
 
@@ -645,10 +645,10 @@ plugin.pipelines.register_function(
 )
 
 plugin.methods.register_function(
-    function=shapely_values,
+    function=shapley_values,
     inputs={**inputs, 'sample_estimator': SampleEstimator[Classifier]},
     parameters={},
-    outputs=[('shap', SampleData[Probabilities])],
+    outputs=[('shap', SampleData[ShapleyValues])],
     input_descriptions={
         'table': input_descriptions['table'],
         'sample_estimator': 'Sample classifier trained with fit_classifier.'},
@@ -664,7 +664,8 @@ plugin.methods.register_function(
 # Registrations
 plugin.register_semantic_types(
     SampleEstimator, BooleanSeries, Importance, ClassifierPredictions,
-    RegressorPredictions, Classifier, Regressor, Probabilities, TrueTargets)
+    RegressorPredictions, Classifier, Regressor, Probabilities, TrueTargets,
+    ShapleyValues)
 plugin.register_semantic_type_to_format(
     SampleEstimator[Classifier],
     artifact_format=SampleEstimatorDirFmt)
@@ -685,6 +686,9 @@ plugin.register_semantic_type_to_format(
     artifact_format=ImportanceDirectoryFormat)
 plugin.register_semantic_type_to_format(
     SampleData[Probabilities],
+    artifact_format=ProbabilitiesDirectoryFormat)
+plugin.register_semantic_type_to_format(
+    SampleData[ShapleyValues],
     artifact_format=ProbabilitiesDirectoryFormat)
 plugin.register_semantic_type_to_format(
     SampleData[TrueTargets],

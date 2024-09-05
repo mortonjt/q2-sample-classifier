@@ -29,7 +29,7 @@ from q2_sample_classifier import (
     Importance, PickleFormat, ProbabilitiesFormat,
     ProbabilitiesDirectoryFormat, Probabilities, Classifier, Regressor,
     SampleEstimator, SampleEstimatorDirFmt,
-    TrueTargetsDirectoryFormat, TrueTargets)
+    TrueTargetsDirectoryFormat, TrueTargets, ShapleyValues)
 from q2_sample_classifier.visuals import (
     _custom_palettes, _plot_heatmap_from_confusion_matrix,)
 from q2_sample_classifier._format import JSONFormat
