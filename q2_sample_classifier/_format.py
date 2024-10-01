@@ -178,6 +178,15 @@ ProbabilitiesDirectoryFormat = model.SingleFileDirectoryFormat(
     ProbabilitiesFormat)
 
 
+class ShapleyValuesFormat(_MultiColumnNumericFormat):
+    pass
+
+
+ShapleyValuesDirectoryFormat = model.SingleFileDirectoryFormat(
+    'ShapleyDirectoryFormat', 'shapley_values.tsv',
+    ShapleyValuesFormat)
+
+
 TrueTargetsDirectoryFormat = model.SingleFileDirectoryFormat(
     'TrueTargetsDirectoryFormat', 'true_targets.tsv',
     PredictionsFormat)

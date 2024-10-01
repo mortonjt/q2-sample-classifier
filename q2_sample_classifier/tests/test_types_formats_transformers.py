@@ -27,7 +27,8 @@ from q2_sample_classifier import (
     PredictionsFormat, PredictionsDirectoryFormat, ClassifierPredictions,
     RegressorPredictions, ImportanceFormat, ImportanceDirectoryFormat,
     Importance, PickleFormat, ProbabilitiesFormat,
-    ProbabilitiesDirectoryFormat, Probabilities, Classifier, Regressor,
+    ProbabilitiesDirectoryFormat, ShapleyValuesFormat,
+    ShapleyValuesDirectoryFormat, Probabilities, Classifier, Regressor,
     SampleEstimator, SampleEstimatorDirFmt,
     TrueTargetsDirectoryFormat, TrueTargets, ShapleyValues)
 from q2_sample_classifier.visuals import (
@@ -371,6 +372,13 @@ class TestSemanticTypes(SampleClassifierTestPluginBase):
     def test_TrueTarget_to_TrueTargets_dir_fmt_registration(self):
         self.assertSemanticTypeRegisteredToFormat(
             SampleData[TrueTargets], TrueTargetsDirectoryFormat)
+
+    def test_ShapleyValue_semantic_type_registration(self):
+        self.assertRegisteredSemanticType(ShapleyValue)
+
+    def test_sample_data_ShapleyValue_to_ShapleyValue_dir_fmt_registration(self):
+        self.assertSemanticTypeRegisteredToFormat(
+            FeatureData[ShapleyValue], ShapleyValueDirectoryFormat)
 
 
 class TestTypes(SampleClassifierTestPluginBase):
