@@ -39,7 +39,7 @@ from ._format import (SampleEstimatorDirFmt,
 from ._type import (ClassifierPredictions, RegressorPredictions,
                     SampleEstimator, BooleanSeries, Importance,
                     Classifier, Regressor, Probabilities,
-                    TrueTargets)
+                    TrueTargets, ShapleyValues)
 import q2_sample_classifier
 from q2_sample_classifier.classify import shapley_values
 
